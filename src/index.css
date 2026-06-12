@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection inside inputs/textareas */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
