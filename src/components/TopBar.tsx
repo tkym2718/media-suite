@@ -6,13 +6,14 @@ interface TopBarProps {
   subtitle?: string
   onHome: () => void
   right?: ReactNode
-  accent?: 'indigo' | 'rose' | 'amber'
+  accent?: 'indigo' | 'rose' | 'amber' | 'emerald'
 }
 
 const ACCENTS: Record<string, string> = {
   indigo: 'from-indigo-500 to-purple-600',
   rose: 'from-rose-500 to-pink-600',
   amber: 'from-amber-500 to-orange-600',
+  emerald: 'from-emerald-500 to-teal-600',
 }
 
 export function TopBar({ title, subtitle, onHome, right, accent = 'indigo' }: TopBarProps) {

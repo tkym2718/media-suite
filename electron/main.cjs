@@ -7,6 +7,7 @@ const fsp = require('node:fs/promises')
 const os = require('node:os')
 const { spawn, execFile } = require('node:child_process')
 const { pathToFileURL } = require('node:url')
+const tagStore = require('./tagStore.cjs')
 
 const isDev = process.env.NODE_ENV === 'development'
 const DEV_URL = 'http://127.0.0.1:5173'
@@ -191,6 +192,19 @@ const MEDIA_EXTS = {
   audio: ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wma'],
   video: ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v', '.ts'],
   image: ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'],
+}
+
+// Reverse lookup: extension -> media kind ('audio' | 'video' | 'image').
+const EXT_TO_KIND = (() => {
+  const map = new Map()
+  for (const [kind, exts] of Object.entries(MEDIA_EXTS)) {
+    for (const e of exts) map.set(e, kind)
+  }
+  return map
+})()
+
+function kindForExt(ext) {
+  return EXT_TO_KIND.get(ext.toLowerCase()) || null
 }
 
 async function walkDir(dir, exts, out, depth) {
@@ -545,6 +559,130 @@ ipcMain.handle('ytdlp:cancel', async (_e, { id }) => {
 })
 
 // ---------------------------------------------------------------------------
+// IPC: Sorter (recursive media scan with progress + tag database)
+// ---------------------------------------------------------------------------
+
+// Pick a root folder for the sorter (any media kind).
+ipcMain.handle('sorter:pickRoot', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '仕分けするフォルダを選択',
+    properties: ['openDirectory'],
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
+
+/**
+ * Recursively walk `root`, collecting every supported media file and streaming
+ * progress back to the renderer. Tag data from the sidecar store is merged in
+ * so the renderer gets everything in a single round-trip.
+ */
+ipcMain.handle('sorter:scan', async (_e, { root, scanId }) => {
+  if (!root || !fs.existsSync(root)) {
+    return { root, files: [], tags: [] }
+  }
+
+  const out = []
+  let scanned = 0
+  let lastEmit = 0
+  const send = (payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sorter:scanProgress', { scanId, ...payload })
+    }
+  }
+
+  async function walk(dir, depth) {
+    if (depth > 24) return
+    let entries
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      // Skip our own sidecar directory and common hidden/system folders.
+      if (entry.isDirectory()) {
+        if (entry.name === tagStore.STORE_DIRNAME) continue
+        if (entry.name.startsWith('$') || entry.name === 'System Volume Information') continue
+        await walk(path.join(dir, entry.name), depth + 1)
+      } else if (entry.isFile()) {
+        const kind = kindForExt(path.extname(entry.name))
+        if (!kind) continue
+        const full = path.join(dir, entry.name)
+        let mtimeMs = 0
+        let size = 0
+        try {
+          const st = await fsp.stat(full)
+          mtimeMs = st.mtimeMs
+          size = st.size
+        } catch {
+          /* ignore */
+        }
+        out.push({
+          path: full,
+          rel: path.relative(root, full).split(path.sep).join('/'),
+          name: entry.name,
+          dir,
+          mtimeMs,
+          size,
+          kind,
+        })
+        scanned += 1
+        const now = Date.now()
+        if (now - lastEmit > 120) {
+          lastEmit = now
+          send({ scanned, total: -1, done: false, currentDir: dir })
+        }
+      }
+    }
+  }
+
+  await walk(root, 0)
+
+  // Merge stored tags.
+  let tagList = []
+  try {
+    const loaded = await tagStore.load(root)
+    tagList = loaded.tags
+    const fileTags = loaded.files
+    for (const f of out) {
+      f.tags = fileTags[f.rel] || []
+    }
+  } catch (e) {
+    console.error('tagStore.load failed', e)
+    for (const f of out) f.tags = []
+  }
+
+  send({ scanned, total: scanned, done: true })
+  return { root, files: out, tags: tagList }
+})
+
+// ---- Tag mutations ------------------------------------------------------
+ipcMain.handle('sorter:loadTags', async (_e, { root }) => tagStore.load(root))
+ipcMain.handle('sorter:setFileTags', async (_e, { root, rel, tags }) =>
+  tagStore.setFileTags(root, rel, tags),
+)
+ipcMain.handle('sorter:addTag', async (_e, { root, rels, tag }) =>
+  tagStore.addTagToFiles(root, rels, tag),
+)
+ipcMain.handle('sorter:removeTag', async (_e, { root, rels, tag }) =>
+  tagStore.removeTagFromFiles(root, rels, tag),
+)
+ipcMain.handle('sorter:createTag', async (_e, { root, name }) => tagStore.createTag(root, name))
+ipcMain.handle('sorter:renameTag', async (_e, { root, oldName, newName }) =>
+  tagStore.renameTag(root, oldName, newName),
+)
+ipcMain.handle('sorter:deleteTag', async (_e, { root, name }) => tagStore.deleteTag(root, name))
+ipcMain.handle('sorter:setPinned', async (_e, { root, name, pinned }) =>
+  tagStore.setPinned(root, name, pinned),
+)
+ipcMain.handle('sorter:flush', async (_e, { root }) => {
+  if (root) await tagStore.flush(root)
+  else await tagStore.flushAll()
+  return true
+})
+
+// ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(() => {
@@ -559,4 +697,16 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// Persist any pending tag changes before the app exits.
+app.on('before-quit', (e) => {
+  e.preventDefault()
+  tagStore
+    .flushAll()
+    .catch((err) => console.error('flushAll on quit failed', err))
+    .finally(() => {
+      app.removeAllListeners('before-quit')
+      app.quit()
+    })
 })

@@ -12,6 +12,9 @@ import type {
   DownloadProgress,
   DownloadLog,
   DownloadDone,
+  TagInfo,
+  TaggedFile,
+  SorterScanProgress,
 } from './types'
 
 export interface MediaSuiteApi {
@@ -40,6 +43,23 @@ export interface MediaSuiteApi {
   onDownloadProgress: (cb: (p: DownloadProgress) => void) => () => void
   onDownloadLog: (cb: (p: DownloadLog) => void) => () => void
   onDownloadDone: (cb: (p: DownloadDone) => void) => () => void
+
+  // Sorter (tagging)
+  sorterPickRoot: () => Promise<string | null>
+  sorterScan: (
+    root: string,
+    scanId: number,
+  ) => Promise<{ root: string; files: TaggedFile[]; tags: TagInfo[] }>
+  onSorterScanProgress: (cb: (p: SorterScanProgress) => void) => () => void
+  sorterLoadTags: (root: string) => Promise<{ tags: TagInfo[]; files: Record<string, string[]> }>
+  sorterSetFileTags: (root: string, rel: string, tags: string[]) => Promise<TagInfo[]>
+  sorterAddTag: (root: string, rels: string[], tag: string) => Promise<TagInfo[]>
+  sorterRemoveTag: (root: string, rels: string[], tag: string) => Promise<TagInfo[]>
+  sorterCreateTag: (root: string, name: string) => Promise<TagInfo[]>
+  sorterRenameTag: (root: string, oldName: string, newName: string) => Promise<TagInfo[]>
+  sorterDeleteTag: (root: string, name: string) => Promise<TagInfo[]>
+  sorterSetPinned: (root: string, name: string, pinned: boolean) => Promise<TagInfo[]>
+  sorterFlush: (root?: string) => Promise<boolean>
 }
 
 declare global {

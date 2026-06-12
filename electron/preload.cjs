@@ -50,6 +50,27 @@ const api = {
     ipcRenderer.on('ytdlp:done', listener)
     return () => ipcRenderer.removeListener('ytdlp:done', listener)
   },
+
+  // Sorter (tagging)
+  sorterPickRoot: () => ipcRenderer.invoke('sorter:pickRoot'),
+  sorterScan: (root, scanId) => ipcRenderer.invoke('sorter:scan', { root, scanId }),
+  onSorterScanProgress: (cb) => {
+    const listener = (_e, payload) => cb(payload)
+    ipcRenderer.on('sorter:scanProgress', listener)
+    return () => ipcRenderer.removeListener('sorter:scanProgress', listener)
+  },
+  sorterLoadTags: (root) => ipcRenderer.invoke('sorter:loadTags', { root }),
+  sorterSetFileTags: (root, rel, tags) =>
+    ipcRenderer.invoke('sorter:setFileTags', { root, rel, tags }),
+  sorterAddTag: (root, rels, tag) => ipcRenderer.invoke('sorter:addTag', { root, rels, tag }),
+  sorterRemoveTag: (root, rels, tag) => ipcRenderer.invoke('sorter:removeTag', { root, rels, tag }),
+  sorterCreateTag: (root, name) => ipcRenderer.invoke('sorter:createTag', { root, name }),
+  sorterRenameTag: (root, oldName, newName) =>
+    ipcRenderer.invoke('sorter:renameTag', { root, oldName, newName }),
+  sorterDeleteTag: (root, name) => ipcRenderer.invoke('sorter:deleteTag', { root, name }),
+  sorterSetPinned: (root, name, pinned) =>
+    ipcRenderer.invoke('sorter:setPinned', { root, name, pinned }),
+  sorterFlush: (root) => ipcRenderer.invoke('sorter:flush', { root }),
 }
 
 contextBridge.exposeInMainWorld('api', api)

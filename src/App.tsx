@@ -4,6 +4,7 @@ import { Launcher } from './features/Launcher'
 import { MusicPlayer } from './features/music/MusicPlayer'
 import { VideoViewer } from './features/video/VideoViewer'
 import { ImageViewer } from './features/image/ImageViewer'
+import { SorterView } from './features/sorter/SorterView'
 
 export default function App() {
   const [feature, setFeature] = useState<Feature>('home')
@@ -15,6 +16,7 @@ export default function App() {
       {feature === 'music' && <MusicPlayer onHome={goHome} />}
       {feature === 'video' && <VideoViewer onHome={goHome} />}
       {feature === 'image' && <ImageViewer onHome={goHome} />}
+      {feature === 'sorter' && <SorterView onHome={goHome} />}
     </div>
   )
 }

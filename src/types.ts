@@ -1,4 +1,4 @@
-export type Feature = 'home' | 'music' | 'video' | 'image'
+export type Feature = 'home' | 'music' | 'video' | 'image' | 'sorter'
 
 export type MediaKind = 'audio' | 'video' | 'image'
 
@@ -8,6 +8,51 @@ export interface MediaFileRef {
   dir: string
   mtimeMs: number
 }
+
+// ---------------------------------------------------------------------------
+// Sorter (tagging) types
+// ---------------------------------------------------------------------------
+
+/** A media file enriched with its tags, used by the Sorter view. */
+export interface TaggedFile {
+  /** Absolute path on disk. */
+  path: string
+  /** Path relative to the scanned root (stable key used for storage). */
+  rel: string
+  name: string
+  dir: string
+  mtimeMs: number
+  size: number
+  kind: MediaKind
+  tags: string[]
+}
+
+export interface TagInfo {
+  name: string
+  /** Number of files currently carrying this tag. */
+  count: number
+  /** Last time this tag was applied (ms epoch). */
+  lastUsed: number
+  /** Whether the user pinned this tag for quick access. */
+  pinned?: boolean
+}
+
+export interface SorterScanProgress {
+  scanId: number
+  scanned: number
+  /** -1 when the total is not yet known. */
+  total: number
+  done: boolean
+  currentDir?: string
+}
+
+export interface SorterLoadResult {
+  root: string
+  files: TaggedFile[]
+  tags: TagInfo[]
+}
+
+export type TagFilterMode = 'and' | 'or'
 
 export interface ProbeInfo {
   ok: boolean

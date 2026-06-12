@@ -1,4 +1,4 @@
-import { Music, Film, Images } from 'lucide-react'
+import { Music, Film, Images, Tags } from 'lucide-react'
 import type { Feature } from '../types'
 import { useTools } from '../lib/useTools'
 import { ToolStatusBar } from '../components/ToolStatusBar'
@@ -38,6 +38,14 @@ const CARDS: {
     icon: Images,
     gradient: 'from-amber-500 to-orange-600',
     ring: 'hover:ring-amber-400',
+  },
+  {
+    id: 'sorter',
+    title: '仕分け (Sorter)',
+    desc: '複数タグ付け・AND/OR絞り込み・画像/動画/音声をまとめて管理',
+    icon: Tags,
+    gradient: 'from-emerald-500 to-teal-600',
+    ring: 'hover:ring-emerald-400',
   },
 ]
 
